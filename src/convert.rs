@@ -1,37 +1,32 @@
-use std::fs::Metadata;
-use std::io;
 use crate::config::Mixin;
 use crate::docker::{Command, Dockerfile, User};
 use derive_more::{Display, Error};
+use std::fs::Metadata;
+use std::io;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 #[derive(Error, Display, Debug)]
 pub enum ConversionError {
     #[display("'base:' found in multiple files: {}, {}", a.display(), b.display())]
-    MultipleBases {
-        a: PathBuf,
-        b: PathBuf
-    },
+    MultipleBases { a: PathBuf, b: PathBuf },
     #[display("No image source has been found! Please define 'base:'")]
     NoBase,
     #[display("Invalid base: {}", _0)]
     UnknownBase(#[error(not(source))] String),
     #[display("Dummy")]
-    Dummy
-
+    Dummy,
 }
 
-enum PackageManager {
+pub enum PackageManager {
     DNF,
     ZYPPER,
     PACMAN,
     APT,
-    APK
+    APK,
 }
 
 impl PackageManager {
-
     const fn install_prefix(&self) -> &'static str {
         match self {
             PackageManager::DNF => "dnf install -y",
@@ -48,8 +43,55 @@ impl PackageManager {
             PackageManager::ZYPPER => "zypper upgrade -y",
             PackageManager::PACMAN => "packman -Syu",
             PackageManager::APT => "apt update && apt upgrade -y",
-            PackageManager::APK => "apk update --noconfirm"
+            PackageManager::APK => "apk update --noconfirm",
         }
+    }
+
+    fn defaults(&self) -> Vec<Command> {
+        let mut result: Vec<Command> = Vec::from([
+            Command::COMMENT("Ensure UTF-8 Support".into()),
+            Command::env("LANG", "en_US.UTF-8"),
+            Command::env("LANGUAGE", "en_US:en"),
+            Command::env("LC_ALL", "en_US.UTF-8"),
+        ]);
+        match self {
+            PackageManager::DNF => result.extend([
+                self.install(&["glibc-locale-source"]),
+                Command::RUN(
+                    "localedef --force --inputfile=en_US --charmap=UTF-8 en_US.UTF-8".to_string(),
+                ),
+            ]),
+            PackageManager::ZYPPER => result.extend([
+                self.install(&["glibc-locale", "glibc-i18ndata"]),
+                Command::RUN(
+                    "localedef --force --inputfile=en_US --charmap=UTF-8 en_US.UTF-8".to_string(),
+                ),
+            ]),
+            PackageManager::PACMAN => {}
+            PackageManager::APT => result.extend([
+                self.install(&["locales"]),
+                Command::RUN("echo \'en_US.UTF-8 UTF-8\' >> /etc/locale.gen".to_string()),
+                Command::RUN("locale-gen".to_string()),
+            ]),
+            PackageManager::APK => {}
+        };
+
+        result.extend([
+            Command::COMMENT("Installing sudo and allow sudo for anyone".into()),
+            self.install(&["sudo"]),
+            Command::RUN("echo 'ALL ALL = (ALL) NOPASSWD: ALL' >> /etc/sudoers".into())
+        ]);
+
+        result
+    }
+
+    pub fn install<T: ToString>(&self, packages: &[T]) -> Command {
+        let packages = packages
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+            .join(" ");
+        Command::RUN(format!("{} {}", self.install_prefix(), packages))
     }
 }
 
@@ -66,7 +108,7 @@ impl FromStr for PackageManager {
             "suse" => Ok(PackageManager::ZYPPER),
             "arch" => Ok(PackageManager::PACMAN),
             "alpine" => Ok(PackageManager::APK),
-            _ => Err(ConversionError::UnknownBase(s.to_string()))
+            _ => Err(ConversionError::UnknownBase(s.to_string())),
         }
     }
 }
@@ -84,15 +126,19 @@ impl TryFrom<&Mixin> for Dockerfile {
                 if let Some(from_file) = from_file {
                     return Err(ConversionError::MultipleBases {
                         a: from_file.path.clone(),
-                        b: mixin.path.clone()
-                    })
+                        b: mixin.path.clone(),
+                    });
                 }
                 from_file = Some(mixin)
             }
             // Filter packages so we do not try to install them twice
             let mut l_packages = Vec::new();
             for package_name in mixin.config.install.iter().flatten() {
-                if !packages.iter().map(|x| x.1.iter().any(|y| y == package_name)).any(|x| x) {
+                if !packages
+                    .iter()
+                    .map(|x| x.1.iter().any(|y| y == package_name))
+                    .any(|x| x)
+                {
                     l_packages.push(package_name.clone());
                 }
             }
@@ -102,7 +148,7 @@ impl TryFrom<&Mixin> for Dockerfile {
         }
 
         let Some(from) = &from_file else {
-            return Err(ConversionError::NoBase)
+            return Err(ConversionError::NoBase);
         };
         let from = from.config.base.as_ref().unwrap().clone();
         let package_manager = PackageManager::from_str(&from)?;
@@ -111,13 +157,18 @@ impl TryFrom<&Mixin> for Dockerfile {
 
         dockerfile.add(Command::FROM(from));
 
-        dockerfile.add(Command::COMMENT("Update outdated default dependencies".into()));
+        dockerfile.add(Command::COMMENT(
+            "Update outdated default dependencies".into(),
+        ));
         dockerfile.add(Command::RUN(package_manager.upgrade().to_string()));
+        dockerfile.add_all(package_manager.defaults());
 
         for (mixin, package_set) in &packages {
-            let packages = package_set.join(" ");
-            dockerfile.add(Command::COMMENT(format!("Installs from: {}", mixin.path.display())));
-            dockerfile.add(Command::RUN(format!("{} {}", package_manager.install_prefix(), packages)));
+            dockerfile.add(Command::COMMENT(format!(
+                "Installs from: {}",
+                mixin.path.display()
+            )));
+            dockerfile.add(package_manager.install(package_set));
         }
 
         // TODO Add exec scripts
@@ -131,12 +182,18 @@ impl TryFrom<&Mixin> for Dockerfile {
 
         dockerfile.add(Command::COMMENT("Configure user".into()));
         dockerfile.add(Command::RUN(format!("groupadd --gid {} {}", gid, gname)));
-        dockerfile.add(Command::RUN(format!("useradd --gid {} --uid {} --home /home/{} {}", gid, uid, uname, uname)));
+        dockerfile.add(Command::RUN(format!(
+            "useradd --gid {} --uid {} --home /home/{} {}",
+            gid, uid, uname, uname
+        )));
         dockerfile.add(Command::RUN(format!("mkdir -p /home/{}", uname)));
-        dockerfile.add(Command::RUN(format!("chown {}:{} /home/{}", uid, gid, uname)));
-        dockerfile.add(Command::USER(User{
+        dockerfile.add(Command::RUN(format!(
+            "chown {}:{} /home/{}",
+            uid, gid, uname
+        )));
+        dockerfile.add(Command::USER(User {
             uid: uid as u16,
-            gid: Some(gid as u16)
+            gid: Some(gid as u16),
         }));
 
         dockerfile.add(Command::COMMENT("Exec bash as entrypoint".into()));
