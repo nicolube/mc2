@@ -170,6 +170,15 @@ impl TryFrom<&Mixin> for Dockerfile {
         let uid = users::get_current_uid();
         let uname = users::get_current_username().unwrap();
         let uname = uname.display();
+        
+        for (mixin, package_set) in &packages {
+            dockerfile.add(Command::COMMENT(format!(
+                "Installs from: {}",
+                mixin.path.display()
+            )));
+            dockerfile.add(package_manager.install(package_set));
+        }
+
 
         dockerfile.add(Command::COMMENT("Configure user".into()));
         dockerfile.add(Command::RUN(format!("groupadd --gid {} {}", gid, gname)));
@@ -187,18 +196,9 @@ impl TryFrom<&Mixin> for Dockerfile {
             gid: Some(gid as u16),
         }));
 
-        for (mixin, package_set) in &packages {
-            dockerfile.add(Command::COMMENT(format!(
-                "Installs from: {}",
-                mixin.path.display()
-            )));
-            dockerfile.add(package_manager.install(package_set));
-        }
-
         if let Some(parent_dir) = value.path.parent()
             && parent_dir.components().count() >= 2
         {
-            println!("Parent Dir: {}", parent_dir.display());
             let dirs = fs::read_dir(parent_dir).unwrap();
             let dirs = dirs
                 .filter_map(|x| match x {
@@ -227,7 +227,6 @@ impl TryFrom<&Mixin> for Dockerfile {
                 "Exec script from: {}",
                 mixin.path.display()
             )));
-            //let script = script.replace("\\", "\\\\").replace("\n", "\\\n");
             dockerfile.add(Command::RUN(format!("<<EOR\n/bin/sh -c {}\nEOR", script)));
         }
 
