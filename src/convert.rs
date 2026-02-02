@@ -1,10 +1,9 @@
 use crate::config::Mixin;
 use crate::docker::{Command, Dockerfile, User};
 use derive_more::{Display, Error};
-use std::fs::Metadata;
-use std::io;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::fs;
 
 #[derive(Error, Display, Debug)]
 pub enum ConversionError {
@@ -14,8 +13,6 @@ pub enum ConversionError {
     NoBase,
     #[display("Invalid base: {}", _0)]
     UnknownBase(#[error(not(source))] String),
-    #[display("Dummy")]
-    Dummy,
 }
 
 pub enum PackageManager {
@@ -79,7 +76,7 @@ impl PackageManager {
         result.extend([
             Command::COMMENT("Installing sudo and allow sudo for anyone".into()),
             self.install(&["sudo"]),
-            Command::RUN("echo 'ALL ALL = (ALL) NOPASSWD: ALL' >> /etc/sudoers".into())
+            Command::RUN("echo 'ALL ALL = (ALL) NOPASSWD: ALL' >> /etc/sudoers".into()),
         ]);
 
         result
@@ -121,6 +118,7 @@ impl TryFrom<&Mixin> for Dockerfile {
         mixins.push(value);
         let mut from_file: Option<&Mixin> = None;
         let mut packages: Vec<(&Mixin, Vec<String>)> = Vec::new();
+        let mut scripts: Vec<(&Mixin, &String)> = Vec::new();
         for mixin in &value.children {
             if mixin.config.base.is_some() {
                 if let Some(from_file) = from_file {
@@ -145,6 +143,9 @@ impl TryFrom<&Mixin> for Dockerfile {
             if !l_packages.is_empty() {
                 packages.push((mixin, l_packages))
             }
+            if let Some(script) = &mixin.script {
+                scripts.push((mixin, script));
+            }
         }
 
         let Some(from) = &from_file else {
@@ -162,16 +163,6 @@ impl TryFrom<&Mixin> for Dockerfile {
         ));
         dockerfile.add(Command::RUN(package_manager.upgrade().to_string()));
         dockerfile.add_all(package_manager.defaults());
-
-        for (mixin, package_set) in &packages {
-            dockerfile.add(Command::COMMENT(format!(
-                "Installs from: {}",
-                mixin.path.display()
-            )));
-            dockerfile.add(package_manager.install(package_set));
-        }
-
-        // TODO Add exec scripts
 
         let gid = users::get_current_gid();
         let gname = users::get_current_groupname().unwrap();
@@ -195,6 +186,50 @@ impl TryFrom<&Mixin> for Dockerfile {
             uid: uid as u16,
             gid: Some(gid as u16),
         }));
+
+        for (mixin, package_set) in &packages {
+            dockerfile.add(Command::COMMENT(format!(
+                "Installs from: {}",
+                mixin.path.display()
+            )));
+            dockerfile.add(package_manager.install(package_set));
+        }
+
+        if let Some(parent_dir) = value.path.parent()
+            && parent_dir.components().count() >= 2
+        {
+            println!("Parent Dir: {}", parent_dir.display());
+            let dirs = fs::read_dir(parent_dir).unwrap();
+            let dirs = dirs
+                .filter_map(|x| match x {
+                    Ok(x)
+                        if x.path().is_dir()
+                            && !x.file_name().to_string_lossy().starts_with(".") =>
+                    {
+                        Some(x.path())
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            if !dirs.is_empty() {
+                dockerfile.add(Command::COMMENT("Adding context dirs".into()));
+            }
+            for file in dirs {
+                dockerfile.add(Command::COPY(
+                    file.to_string_lossy().to_string(),
+                    format!("/{}", file.file_name().unwrap().to_string_lossy()),
+                ));
+            }
+        }
+
+        for (mixin, script) in scripts {
+            dockerfile.add(Command::COMMENT(format!(
+                "Exec script from: {}",
+                mixin.path.display()
+            )));
+            //let script = script.replace("\\", "\\\\").replace("\n", "\\\n");
+            dockerfile.add(Command::RUN(format!("<<EOR\n/bin/sh -c {}\nEOR", script)));
+        }
 
         dockerfile.add(Command::COMMENT("Exec bash as entrypoint".into()));
         dockerfile.add(Command::RUN("/usr/bin/env bash".into()));
