@@ -5,11 +5,11 @@ mod docker;
 use crate::config::Mixin;
 use crate::docker::Dockerfile;
 use clap::Parser;
-use sha1::{Digest, Sha1};
 use std::io::{BufWriter, Cursor, Write};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::{env, io, process};
+use sha2::Digest;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, trailing_var_arg = true)]
@@ -89,7 +89,7 @@ fn main() -> io::Result<()> {
         return Ok(());
     } else {
         let hash = {
-            let mut hasher = Sha1::new();
+            let mut hasher = sha2::Sha256::new();
             Digest::update(&mut hasher, docker_file_data.as_bytes());
             hex::encode(hasher.finalize())
         };
