@@ -1,7 +1,9 @@
 use derive_more::Display;
 use std::fmt::{Display, Formatter};
-use std::io::{BufWriter, Write};
-use crate::convert::PackageManager;
+use std::io::{BufWriter, Cursor, ErrorKind, Write};
+use std::{env, io, process};
+use std::process::Stdio;
+use sha2::Digest;
 
 #[derive(Debug, Clone)]
 pub struct User {
@@ -69,7 +71,71 @@ impl Dockerfile {
             }
             write!(writer, "{}\n", entry)?;
         }
-
         Ok(())
+    }
+
+    pub fn hash(&self) -> String {
+        let mut hasher = sha2::Sha256::new();
+        Digest::update(&mut hasher, self.to_string().as_bytes());
+        hex::encode(hasher.finalize())
+    }
+
+    pub fn tag(&self) -> String {
+        format!("mini-cross2-{}", self.hash())
+    }
+
+    pub fn exists(&self) -> io::Result<bool> {
+        let tag = self.tag();
+        let output = process::Command::new("docker").args([
+            "images",
+            "-q", &tag
+        ]).output()?;
+        Ok(!output.stdout.is_empty() && output.status.success())
+    }
+
+    pub fn build(&self) -> io::Result<()> {
+        let tag = self.tag();
+        // Build image
+        let mut build_progress = process::Command::new("docker")
+            .args(["image", "build", "--tag", &tag, "-f", "-", "."])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::inherit())
+            .spawn()?;
+        // Pipe dockerfile into the progress since it es read from stdin
+        let stdin = build_progress.stdin.as_mut().unwrap();
+        self.write_to(&mut BufWriter::new(stdin))?;
+        if !build_progress.wait()?.success() {
+            return Err(io::Error::new(ErrorKind::InvalidInput, "Failed to build docker image"));
+        }
+        Ok(())
+    }
+
+    pub fn run(&self, cmd: &Vec<String>) -> io::Result<()> {
+        let tag = self.tag();
+
+        let workdir = env::current_dir()?;
+        let display = env!("DISPLAY");
+        process::Command::new("docker").args([
+            "run",
+            "--rm",
+            "-it",
+            "-e", &format!("DISPLAY={}", display),
+            "-v", "/tmp/.X11-unix:/tmp/.X11-unix",
+            "-v", &format!("{}:{}", workdir.display(), workdir.display()),
+            "-w", &workdir.to_string_lossy(),
+            &tag,
+        ]).args(cmd).status()?;
+        Ok(())
+    }
+}
+
+impl Display for Dockerfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut buf = Cursor::new(Vec::new());
+        {
+            let mut buf = BufWriter::new(&mut buf);
+            self.write_to(&mut buf).unwrap();
+        }
+        write!(f, "{}", String::from_utf8(buf.into_inner()).unwrap())
     }
 }

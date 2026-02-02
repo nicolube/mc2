@@ -5,11 +5,10 @@ mod docker;
 use crate::config::Mixin;
 use crate::docker::Dockerfile;
 use clap::Parser;
-use std::io::{BufWriter, Cursor, Write};
-use std::path::PathBuf;
-use std::process::Stdio;
-use std::{env, io, process};
 use sha2::Digest;
+use std::io::{stdout, BufWriter, Cursor, Write};
+use std::path::PathBuf;
+use std::io;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, trailing_var_arg = true)]
@@ -17,6 +16,10 @@ struct Cli {
     /// Prints out generated docker file
     #[arg(short, long, default_value = "false")]
     dry_run: bool,
+
+    /// Forces rebuild of docker image
+    #[arg(short = 'F', default_value = "false")]
+    force: bool,
 
     /// Name of environment,
     /// Config will be searched at:
@@ -82,52 +85,20 @@ fn main() -> io::Result<()> {
         let mut buf = BufWriter::new(&mut buf);
         dockerfile.write_to(&mut buf)?;
     }
-    let docker_file_data = String::from_utf8(buf.into_inner()).unwrap();
 
     if cli.dry_run {
-        println!("{}", docker_file_data);
+        dockerfile.write_to(&mut BufWriter::new(stdout()))?;
         return Ok(());
     } else {
-        let hash = {
-            let mut hasher = sha2::Sha256::new();
-            Digest::update(&mut hasher, docker_file_data.as_bytes());
-            hex::encode(hasher.finalize())
-        };
-        let tag = &format!("mini-cross2-{}", hash);
-
-        let output = process::Command::new("docker").args([
-            "images",
-            "-q", tag
-        ]).output()?;
-        let exists = !output.stdout.is_empty();
-
-        if exists {
+        if dockerfile.exists()? && !cli.force {
             println!("Image already exists, skipping build...");
         } else {
-            // Build image
-            let mut build_progress = process::Command::new("docker")
-                .args(["image", "build", "--tag", &tag, "-f", "-", "."])
-                .stdin(Stdio::piped())
-                .stdout(Stdio::inherit())
-                .spawn()?;
-            // Pipe dockerfile into the progress since it es read from stdin
-            let stdin = build_progress.stdin.as_mut().unwrap();
-            stdin.write_all(docker_file_data.as_bytes())?;
-            build_progress.wait()?;
+            if cli.force {
+                println!("Force rebuild of image...");
+            }
+            dockerfile.build()?;
         }
-
-        let workdir = env::current_dir()?;
-        let display = env!("DISPLAY");
-        process::Command::new("docker").args([
-            "run",
-            "--rm",
-            "-it",
-            "-e", &format!("DISPLAY={}", display),
-            "-v", "/tmp/.X11-unix:/tmp/.X11-unix",
-            "-v", &format!("{}:{}", workdir.display(), workdir.display()),
-            "-w", &workdir.to_string_lossy(),
-            tag,
-        ]).args(cli.cmd).status()?;
+        dockerfile.run(&cli.cmd)?;
 
     }
 
