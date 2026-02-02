@@ -5,10 +5,11 @@ mod docker;
 use crate::config::Mixin;
 use crate::docker::Dockerfile;
 use clap::Parser;
-use sha2::Digest;
-use std::io::{stdout, BufWriter, Cursor, Write};
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::fs::File;
 use std::io;
+use std::io::{BufReader, BufWriter, Cursor, stdout};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, trailing_var_arg = true)]
@@ -37,6 +38,31 @@ struct Cli {
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
+    let alias_file: Option<PathBuf> = {
+        [
+            PathBuf::from(".mc2aliases.yaml"),
+            PathBuf::from_iter([".mc", ".mc2aliases.yaml"]),
+        ]
+        .into_iter()
+        .find_map(|path| {
+            if cli.machine.is_none() || !path.exists() {
+                return None;
+            }
+            let read = BufReader::new(File::open(&path).unwrap());
+            let aliases: HashMap<String, PathBuf> = serde_yaml::from_reader(read).unwrap();
+            aliases
+                .get(&cli.machine.clone().unwrap())
+                .map(|target|  {
+                    let mut target = match path.parent() {
+                        Some(path) => path.join(target),
+                        None => target.clone(),
+                    };
+                    target.set_extension("yaml");
+                    target
+                })
+        })
+    };
+
     // Search paths
     let paths = match cli.machine {
         None => Vec::from([
@@ -45,11 +71,11 @@ fn main() -> io::Result<()> {
         ]),
         Some(machine) => {
             let machine_file_name = format!("{}.yaml", machine);
-            Vec::from([
+            Vec::from_iter(alias_file.into_iter().chain([
                 PathBuf::from(&machine_file_name),
                 PathBuf::from_iter([".mc", &machine_file_name]),
                 PathBuf::from_iter([".mc", &machine, &machine_file_name]),
-            ])
+            ]))
         }
     };
 
@@ -99,7 +125,6 @@ fn main() -> io::Result<()> {
             dockerfile.build()?;
         }
         dockerfile.run(&cli.cmd)?;
-
     }
 
     Ok(())

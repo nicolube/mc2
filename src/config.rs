@@ -32,7 +32,6 @@ pub struct Config {
     pub base: Option<String>,
     pub install: Option<Vec<String>>,
     pub mixin: Option<Vec<PathBuf>>,
-    pub workdir: Option<String>,
 }
 
 impl Default for Config {
@@ -41,7 +40,6 @@ impl Default for Config {
             base: None,
             install: None,
             mixin: None,
-            workdir: None,
         }
     }
 }
@@ -193,7 +191,6 @@ mod tests {
             mixin.config.install,
             Some(vec!["curl".into(), "git".into()])
         );
-        assert_eq!(mixin.config.workdir.as_deref(), Some("/app"));
         assert_eq!(
             mixin.script.as_deref(),
             Some("echo hello\n".trim_end_matches('\n'))
