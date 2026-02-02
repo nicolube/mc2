@@ -2,6 +2,9 @@
 name = "mc2"
 version = "0.0.1"
 edition = "2024"
+license-file = "LICENSE"
+description = "Provides user configured development environments using docker. Rust replacement for https://github.com/ooxi/mini-cross"
+repository = "https://github.com/nicolube/mc2"
 
 [dependencies]
 clap = { version = "4.5.47", features = ["derive"] }
