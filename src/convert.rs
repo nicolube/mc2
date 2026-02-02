@@ -1,19 +1,21 @@
+use std::fs::Metadata;
+use std::io;
 use crate::config::Mixin;
-use crate::docker::{Command, Dockerfile};
+use crate::docker::{Command, Dockerfile, User};
 use derive_more::{Display, Error};
 use std::path::PathBuf;
 use std::str::FromStr;
 
 #[derive(Error, Display, Debug)]
 pub enum ConversionError {
-    #[display("'from:' found in multiple files: {}, {}", a.display(), b.display())]
-    MultibleFrom{
+    #[display("'base:' found in multiple files: {}, {}", a.display(), b.display())]
+    MultipleBases {
         a: PathBuf,
         b: PathBuf
     },
-    #[display("No image source has been found! Please define 'from:'")]
-    NoFrom,
-    #[display("Invalid image source: {}", _0)]
+    #[display("No image source has been found! Please define 'base:'")]
+    NoBase,
+    #[display("Invalid base: {}", _0)]
     UnknownBase(#[error(not(source))] String),
     #[display("Dummy")]
     Dummy
@@ -42,11 +44,11 @@ impl PackageManager {
 
     const fn upgrade(&self) -> &'static str {
         match self {
-            PackageManager::DNF => "dnf upgrade",
-            PackageManager::ZYPPER => "zypper upgrade",
+            PackageManager::DNF => "dnf upgrade -y",
+            PackageManager::ZYPPER => "zypper upgrade -y",
             PackageManager::PACMAN => "packman -Syu",
             PackageManager::APT => "apt update && apt upgrade -y",
-            PackageManager::APK => "apk update"
+            PackageManager::APK => "apk update --noconfirm"
         }
     }
 }
@@ -80,7 +82,7 @@ impl TryFrom<&Mixin> for Dockerfile {
         for mixin in &value.children {
             if mixin.config.base.is_some() {
                 if let Some(from_file) = from_file {
-                    return Err(ConversionError::MultibleFrom {
+                    return Err(ConversionError::MultipleBases {
                         a: from_file.path.clone(),
                         b: mixin.path.clone()
                     })
@@ -100,7 +102,7 @@ impl TryFrom<&Mixin> for Dockerfile {
         }
 
         let Some(from) = &from_file else {
-            return Err(ConversionError::NoFrom)
+            return Err(ConversionError::NoBase)
         };
         let from = from.config.base.as_ref().unwrap().clone();
         let package_manager = PackageManager::from_str(&from)?;
@@ -108,6 +110,8 @@ impl TryFrom<&Mixin> for Dockerfile {
         let mut dockerfile = Dockerfile::new();
 
         dockerfile.add(Command::FROM(from));
+
+        dockerfile.add(Command::COMMENT("Update outdated default dependencies".into()));
         dockerfile.add(Command::RUN(package_manager.upgrade().to_string()));
 
         for (mixin, package_set) in &packages {
@@ -115,6 +119,28 @@ impl TryFrom<&Mixin> for Dockerfile {
             dockerfile.add(Command::COMMENT(format!("Installs from: {}", mixin.path.display())));
             dockerfile.add(Command::RUN(format!("{} {}", package_manager.install_prefix(), packages)));
         }
+
+        // TODO Add exec scripts
+
+        let gid = users::get_current_gid();
+        let gname = users::get_current_groupname().unwrap();
+        let gname = gname.display();
+        let uid = users::get_current_uid();
+        let uname = users::get_current_username().unwrap();
+        let uname = uname.display();
+
+        dockerfile.add(Command::COMMENT("Configure user".into()));
+        dockerfile.add(Command::RUN(format!("groupadd --gid {} {}", gid, gname)));
+        dockerfile.add(Command::RUN(format!("useradd --gid {} --uid {} --home /home/{} {}", gid, uid, uname, uname)));
+        dockerfile.add(Command::RUN(format!("mkdir -p /home/{}", uname)));
+        dockerfile.add(Command::RUN(format!("chown {}:{} /home/{}", uid, gid, uname)));
+        dockerfile.add(Command::USER(User{
+            uid: uid as u16,
+            gid: Some(gid as u16)
+        }));
+
+        dockerfile.add(Command::COMMENT("Exec bash as entrypoint".into()));
+        dockerfile.add(Command::RUN("/usr/bin/env bash".into()));
 
         Ok(dockerfile)
     }

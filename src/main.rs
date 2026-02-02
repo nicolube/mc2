@@ -67,16 +67,18 @@ fn main() -> io::Result<()> {
             return Ok(());
         }
     };
-
-
+    
     let dockerfile = Dockerfile::try_from(&config).expect("Failed to convert toolchain file");
-    let mut inner = Cursor::new(Vec::new());
-    {
-        let mut buf = BufWriter::new(&mut inner);
-        dockerfile.write_to(&mut buf).unwrap();
-    }
 
-    println!("{}", String::from_utf8(inner.into_inner()).unwrap());
+    if cli.dry_run {
+        let mut inner = Cursor::new(Vec::new());
+        {
+            let mut buf = BufWriter::new(&mut inner);
+            dockerfile.write_to(&mut buf).unwrap();
+        }
+        println!("{}", String::from_utf8(inner.into_inner()).unwrap());
+        return Ok(());
+    }
 
     Ok(())
 }
