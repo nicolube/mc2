@@ -117,11 +117,12 @@ fn main() -> io::Result<()> {
         }
 
         let workdir = env::current_dir()?;
+        let display = env!("DISPLAY");
         process::Command::new("docker").args([
             "run",
             "--rm",
             "-it",
-            "-e", "DISPLAY=`(echo $DISPLAY)`",
+            "-e", &format!("DISPLAY={}", display),
             "-v", "/tmp/.X11-unix:/tmp/.X11-unix",
             "-v", &format!("{}:{}", workdir.display(), workdir.display()),
             "-w", &workdir.to_string_lossy(),
