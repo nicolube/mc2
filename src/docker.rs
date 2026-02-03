@@ -1,9 +1,9 @@
 use derive_more::Display;
+use sha2::Digest;
 use std::fmt::{Display, Formatter};
 use std::io::{BufWriter, Cursor, ErrorKind, Write};
-use std::{env, io, process};
 use std::process::Stdio;
-use sha2::Digest;
+use std::{env, io, process};
 
 #[derive(Debug, Clone)]
 pub struct User {
@@ -48,12 +48,16 @@ impl Command {
 #[derive(Debug)]
 pub struct Dockerfile {
     entries: Vec<Command>,
+    publish: Vec<String>,
+    volumes: Vec<String>,
 }
 
 impl Dockerfile {
     pub fn new() -> Self {
         Dockerfile {
             entries: Vec::new(),
+            publish: Vec::new(),
+            volumes: Vec::new(),
         }
     }
 
@@ -86,10 +90,9 @@ impl Dockerfile {
 
     pub fn exists(&self) -> io::Result<bool> {
         let tag = self.tag();
-        let output = process::Command::new("docker").args([
-            "images",
-            "-q", &tag
-        ]).output()?;
+        let output = process::Command::new("docker")
+            .args(["images", "-q", &tag])
+            .output()?;
         Ok(!output.stdout.is_empty() && output.status.success())
     }
 
@@ -105,26 +108,56 @@ impl Dockerfile {
         let stdin = build_progress.stdin.as_mut().unwrap();
         self.write_to(&mut BufWriter::new(stdin))?;
         if !build_progress.wait()?.success() {
-            return Err(io::Error::new(ErrorKind::InvalidInput, "Failed to build docker image"));
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "Failed to build docker image",
+            ));
         }
         Ok(())
     }
 
-    pub fn run(&self, cmd: &Vec<String>) -> io::Result<()> {
+    pub fn run(
+        &self,
+        cmd: &Vec<String>,
+        publish: &Vec<String>,
+        volumes: &Vec<String>,
+    ) -> io::Result<()> {
         let tag = self.tag();
 
         let workdir = env::current_dir()?;
         let display = env!("DISPLAY");
-        process::Command::new("docker").args([
-            "run",
-            "--rm",
-            "-it",
-            "-e", &format!("DISPLAY={}", display),
-            "-v", "/tmp/.X11-unix:/tmp/.X11-unix",
-            "-v", &format!("{}:{}", workdir.display(), workdir.display()),
-            "-w", &workdir.to_string_lossy(),
-            &tag,
-        ]).args(cmd).status()?;
+        let publish = publish.iter().chain(self
+            .publish.iter())
+            .into_iter()
+            .map(|x| ["-p", x.as_str()])
+            .flatten()
+            .collect::<Vec<&str>>();
+        let volumes = volumes
+            .iter()
+            .chain(self.volumes.iter())
+            .into_iter()
+            .map(|x| ["-v", x.as_str()])
+            .flatten()
+            .collect::<Vec<&str>>();
+        process::Command::new("docker")
+            .args([
+                "run",
+                "--rm",
+                "-it",
+                "-e",
+                &format!("DISPLAY={}", display),
+                "-v",
+                "/tmp/.X11-unix:/tmp/.X11-unix",
+                "-v",
+                &format!("{}:{}", workdir.display(), workdir.display()),
+                "-w",
+                &workdir.to_string_lossy(),
+            ])
+            .args(publish)
+            .args(volumes)
+            .arg(&tag)
+            .args(cmd)
+            .status()?;
         Ok(())
     }
 }

@@ -22,6 +22,14 @@ struct Cli {
     #[arg(short = 'F', default_value = "false")]
     force: bool,
 
+    /// Mound volumes, will be forwarded to docker run.
+    #[arg(short, long)]
+    volumes: Vec<String>,
+
+    /// Published ports, will be forwarded to docker run.
+    #[arg(short, long)]
+    publish: Vec<String>,
+
     /// Name of environment,
     /// Config will be searched at:
     /// mc.yml,
@@ -124,7 +132,7 @@ fn main() -> io::Result<()> {
             }
             dockerfile.build()?;
         }
-        dockerfile.run(&cli.cmd)?;
+        dockerfile.run(&cli.cmd, &cli.publish, &cli.volumes)?;
     }
 
     Ok(())

@@ -32,6 +32,7 @@ pub struct Config {
     pub base: Option<String>,
     pub install: Option<Vec<String>>,
     pub mixin: Option<Vec<PathBuf>>,
+    pub publish: Option<Vec<String>>,
 }
 
 impl Default for Config {
@@ -40,6 +41,7 @@ impl Default for Config {
             base: None,
             install: None,
             mixin: None,
+            publish: None,
         }
     }
 }
