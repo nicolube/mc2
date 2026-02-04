@@ -1,0 +1,15 @@
+---
+base: archlinux:base-20260125.0.484595
+install:
+  - gcc
+  - curl
+  - openssl
+---
+#!/bin/bash
+
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+. "$HOME/.cargo/env"
+  
+# Install MC2
+cargo install mc2

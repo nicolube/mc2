@@ -57,11 +57,12 @@ Since mini-cross needs to know how to install packages on a certain
 distribution, not all Docker images are supported as base images. Current
 support includes:
 
--Arch Linux (Untested)
-- Debian  (Untested)
+- Alpine (Not working atm)
+- Arch Linux
+- Debian
 - Fedora
-- OpenSuse (Untested)
-- Ubuntu  (Untested)
+- OpenSuse (Tumbleweed and Leap)
+- Ubuntu
 
 
 [base-docker-image]: https://docs.docker.com/engine/reference/builder/#from
