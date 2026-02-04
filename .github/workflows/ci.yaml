@@ -31,7 +31,7 @@ jobs:
         run: cargo test
   integration_test:
     needs: build
-    continue-on-error: true
+    # continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: Install openssl
@@ -56,5 +56,5 @@ jobs:
 
     strategy:
       matrix:
-        os: [ "debian", "ubuntu", "fedora", "opensuse" ]
+        os: [ "arch", "debian", "ubuntu", "fedora", "opensuse" ]
 

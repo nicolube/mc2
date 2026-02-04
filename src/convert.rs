@@ -28,7 +28,7 @@ impl PackageManager {
         match self {
             PackageManager::DNF => "dnf install -y",
             PackageManager::ZYPPER => "zypper install -y",
-            PackageManager::PACMAN => "packman -S --noconfirm",
+            PackageManager::PACMAN => "pacman -S --noconfirm",
             PackageManager::APT => "apt install -y",
             PackageManager::APK => "apk add",
         }
@@ -38,9 +38,9 @@ impl PackageManager {
         match self {
             PackageManager::DNF => "dnf upgrade -y",
             PackageManager::ZYPPER => "zypper update -y",
-            PackageManager::PACMAN => "packman -Syu",
+            PackageManager::PACMAN => "pacman -Syu --noconfirm",
             PackageManager::APT => "apt update && apt upgrade -y",
-            PackageManager::APK => "apk update --noconfirm",
+            PackageManager::APK => "apk update",
         }
     }
 
@@ -60,9 +60,6 @@ impl PackageManager {
             ]),
             PackageManager::ZYPPER => result.extend([
                 self.install(&["glibc-locale", "glibc-i18ndata"]),
-                Command::RUN(
-                    "localedef --force --inputfile=en_US --charmap=UTF-8 en_US.UTF-8".to_string(),
-                ),
             ]),
             PackageManager::PACMAN => {}
             PackageManager::APT => result.extend([
@@ -104,8 +101,7 @@ impl FromStr for PackageManager {
             "ubuntu" => Ok(PackageManager::APT),
             "opensuse/leap" => Ok(PackageManager::ZYPPER),
             "opensuse/tumbleweed" => Ok(PackageManager::ZYPPER),
-            "suse" => Ok(PackageManager::ZYPPER),
-            "arch" => Ok(PackageManager::PACMAN),
+            "archlinux" => Ok(PackageManager::PACMAN),
             "alpine" => Ok(PackageManager::APK),
             _ => Err(ConversionError::UnknownBase(s.to_string())),
         }
