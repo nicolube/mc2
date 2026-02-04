@@ -119,7 +119,7 @@ impl TryFrom<&Mixin> for Dockerfile {
         let mut from_file: Option<&Mixin> = None;
         let mut packages: Vec<(&Mixin, Vec<String>)> = Vec::new();
         let mut scripts: Vec<(&Mixin, &String)> = Vec::new();
-        for mixin in &value.children {
+        for mixin in value.children.iter().chain([value].into_iter()) {
             if mixin.config.base.is_some() {
                 if let Some(from_file) = from_file {
                     return Err(ConversionError::MultipleBases {
