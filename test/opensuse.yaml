@@ -1,7 +1,6 @@
 ---
 base: opensuse/leap:15
 install:
-  - echo
   - gcc
   - curl
   - openssl-devel

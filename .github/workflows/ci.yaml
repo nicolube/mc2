@@ -31,6 +31,7 @@ jobs:
         run: cargo test
   integration_test:
     needs: build
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: Install openssl

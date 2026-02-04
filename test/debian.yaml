@@ -1,7 +1,6 @@
 ---
 base: debian:trixie-slim
 install:
-  - echo
   - gcc
   - curl
   - libssl-dev

@@ -1,7 +1,6 @@
 ---
 base: fedora:rawhide
 install:
-  - echo
   - gcc
   - curl
   - openssl-devel

@@ -1,7 +1,6 @@
 ---
 base: ubuntu:resolute
 install:
-  - echo
   - gcc
   - curl
   - libssl-dev
