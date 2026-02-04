@@ -131,8 +131,14 @@ impl Dockerfile {
         let tag = self.tag();
 
         let workdir = env::current_dir()?;
-        let display = env::var("DISPLAY")
-            .map_err(|_| io::Error::new(ErrorKind::InvalidInput, "Invalid display"))?;
+        let display_args = env::var("DISPLAY").ok().map(|display| {
+            [
+            "-e".to_string(),
+            format!("DISPLAY={}", display),
+            "-v".to_string(),
+            "/tmp/.X11-unix:/tmp/.X11-unix".to_string()
+            ].to_vec()
+        }).unwrap_or_default();
         let publish = publish
             .iter()
             .chain(self.publish.iter())
@@ -152,15 +158,12 @@ impl Dockerfile {
                 "run",
                 "--rm",
                 "-it",
-                "-e",
-                &format!("DISPLAY={}", display),
-                "-v",
-                "/tmp/.X11-unix:/tmp/.X11-unix",
                 "-v",
                 &format!("{}:{}", workdir.display(), workdir.display()),
                 "-w",
                 &workdir.to_string_lossy(),
             ])
+            .args(display_args)
             .args(publish)
             .args(volumes)
             .arg(&tag)
