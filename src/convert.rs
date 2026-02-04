@@ -67,6 +67,7 @@ impl PackageManager {
             PackageManager::PACMAN => {}
             PackageManager::APT => result.extend([
                 self.install(&["locales"]),
+                Command::arg("DEBIAN_FRONTEND", "noninteractive"),
                 Command::RUN("echo \'en_US.UTF-8 UTF-8\' >> /etc/locale.gen".to_string()),
                 Command::RUN("locale-gen".to_string()),
             ]),

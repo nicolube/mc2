@@ -31,6 +31,8 @@ pub enum Command {
     CMD(String),
     #[display("ENV {}={}", _0, _1)]
     ENV(String, String),
+    #[display("ARG {}={}", _0, _1)]
+    ARG(String, String),
     #[display("RUN {}", _0)]
     RUN(String),
     #[display("USER {}", _0)]
@@ -42,6 +44,10 @@ pub enum Command {
 impl Command {
     pub fn env<A: ToString + ?Sized, B: ToString + ?Sized>(a: &A, b: &B) -> Self {
         Self::ENV(a.to_string(), b.to_string())
+    }
+    
+    pub fn arg<A: ToString + ?Sized, B: ToString + ?Sized>(a: &A, b: &B) -> Self {
+        Self::ARG(a.to_string(), b.to_string())
     }
 }
 
