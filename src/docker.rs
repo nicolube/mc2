@@ -45,7 +45,7 @@ impl Command {
     pub fn env<A: ToString + ?Sized, B: ToString + ?Sized>(a: &A, b: &B) -> Self {
         Self::ENV(a.to_string(), b.to_string())
     }
-    
+
     pub fn arg<A: ToString + ?Sized, B: ToString + ?Sized>(a: &A, b: &B) -> Self {
         Self::ARG(a.to_string(), b.to_string())
     }
@@ -131,9 +131,11 @@ impl Dockerfile {
         let tag = self.tag();
 
         let workdir = env::current_dir()?;
-        let display = env!("DISPLAY");
-        let publish = publish.iter().chain(self
-            .publish.iter())
+        let display = env::var("DISPLAY")
+            .map_err(|_| io::Error::new(ErrorKind::InvalidInput, "Invalid display"))?;
+        let publish = publish
+            .iter()
+            .chain(self.publish.iter())
             .into_iter()
             .map(|x| ["-p", x.as_str()])
             .flatten()

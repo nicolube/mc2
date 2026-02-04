@@ -1,0 +1,16 @@
+---
+base: debian:trixie-slim
+install:
+  - echo
+  - gcc
+  - curl
+  - libssl-dev
+---
+#!/bin/bash
+
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+. "$HOME/.cargo/env"
+  
+# Install MC2
+cargo install mc2

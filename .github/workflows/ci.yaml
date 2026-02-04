@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install openssl
+      run: sudo apt install -y openssl
+    - uses: actions/checkout@v4
+    - name: Build
+      run: cargo build -r
+    - uses: actions/upload-artifact@v4
+      with:
+        name: binary
+        path: target/release/mc2
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install openssl
+        run: sudo apt install -y openssl
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cargo test
+  integration_test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install openssl
+        run: sudo apt install -y openssl
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: binary
+          path: target/release/mc2
+      - name: Prepare Binary
+        run: |
+          mv target/release/mc2/mc2 .
+          chmod +x mc2
+      - name: Run Integration Test - ${{ matrix.os }}
+        run: |
+          cd test
+          .././mc2 ${{ matrix.os }} echo "Hello World"
+
+    strategy:
+      matrix:
+        os: [ "debian", "ubuntu", "fedora", "opensuse" ]
+
