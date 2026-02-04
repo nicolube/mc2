@@ -183,7 +183,7 @@ mod tests {
 
     #[test]
     fn valid_config_and_script() {
-        let input = "---\nfrom: ubuntu:22.04\ninstall:\n  - curl\n  - git\nmixin: []\nworkdir: /app\n---\necho hello\n";
+        let input = "---\nbase: ubuntu:22.04\ninstall:\n  - curl\n  - git\nmixin: []\nworkdir: /app\n---\necho hello\n";
         let reader = to_reader(input);
         let path = Path::new("/tmp/test.mc");
         let mixin = Mixin::try_from((path, reader)).expect("should parse");
@@ -201,7 +201,7 @@ mod tests {
 
     #[test]
     fn valid_config_no_script() {
-        let input = "---\nfrom: alpine:3.20\n---\n";
+        let input = "---\nbase: alpine:3.20\n---\n";
         let reader = to_reader(input);
         let path = Path::new("/tmp/test2.mc");
         let mixin = Mixin::try_from((path, reader)).expect("should parse");
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn missing_closing_dashes_errors() {
-        let input = "---\nfrom: ubuntu\n# missing closing dashes\necho hi\n";
+        let input = "---\nbase: ubuntu\n# missing closing dashes\necho hi\n";
         let reader = to_reader(input);
         let path = Path::new("/tmp/bad.mc");
         let err = Mixin::try_from((path, reader)).unwrap_err();
@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn crlf_normalization() {
-        let input = "---\r\nfrom: alpine\r\n---\r\necho hi\r\n";
+        let input = "---\r\nbase: alpine\r\n---\r\necho hi\r\n";
         let reader = to_reader(input);
         let path = Path::new("/tmp/crlf.mc");
         let mixin = Mixin::try_from((path, reader)).expect("should parse");
