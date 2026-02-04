@@ -37,7 +37,7 @@ impl PackageManager {
     const fn upgrade(&self) -> &'static str {
         match self {
             PackageManager::DNF => "dnf upgrade -y",
-            PackageManager::ZYPPER => "zypper upgrade -y",
+            PackageManager::ZYPPER => "zypper update -y",
             PackageManager::PACMAN => "packman -Syu",
             PackageManager::APT => "apt update && apt upgrade -y",
             PackageManager::APK => "apk update --noconfirm",
