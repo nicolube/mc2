@@ -123,7 +123,7 @@ impl TryFrom<&Mixin> for Dockerfile {
         let mut packages: Vec<(&Mixin, Vec<String>)> = Vec::new();
         let mut scripts: Vec<(&Mixin, &String)> = Vec::new();
         for mixin in &mixins {
-            if mixin.config.base.is_some() {
+            if mixin.yaml.base.is_some() {
                 if let Some(from_file) = from_file {
                     return Err(ConversionError::MultipleBases {
                         a: from_file.path.clone(),
@@ -134,7 +134,7 @@ impl TryFrom<&Mixin> for Dockerfile {
             }
             // Filter packages so we do not try to install them twice
             let mut l_packages = Vec::new();
-            for package_name in mixin.config.install.iter().flatten() {
+            for package_name in mixin.yaml.install.iter().flatten() {
                 if !packages
                     .iter()
                     .map(|x| x.1.iter().any(|y| y == package_name))
@@ -150,11 +150,11 @@ impl TryFrom<&Mixin> for Dockerfile {
                 scripts.push((mixin, script));
             }
 
-            if let Some(publish) = &mixin.config.publish {
+            if let Some(publish) = &mixin.yaml.publish {
                 dockerfile.add_publishes(publish.iter());
             }
 
-            if let Some(volume) = &mixin.config.volume {
+            if let Some(volume) = &mixin.yaml.volume {
                 dockerfile.add_publishes(volume.iter());
             }
         }
@@ -162,7 +162,7 @@ impl TryFrom<&Mixin> for Dockerfile {
         let Some(from) = &from_file else {
             return Err(ConversionError::NoBase);
         };
-        let from = from.config.base.as_ref().unwrap().clone();
+        let from = from.yaml.base.as_ref().unwrap().clone();
         let package_manager = PackageManager::from_str(&from)?;
 
         dockerfile.add(Command::FROM(from));
