@@ -70,8 +70,17 @@ impl Dockerfile {
     pub fn add(&mut self, command: Command) {
         self.entries.push(command)
     }
+
     pub fn add_all<I: IntoIterator<Item = Command>>(&mut self, commands: I) {
         self.entries.extend(commands)
+    }
+
+    pub fn add_volumes<'a, I: Iterator<Item = &'a String>>(&mut self, args: I) {
+        self.volumes.extend(args.cloned())
+    }
+
+    pub fn add_publishes<'a, I: Iterator<Item = &'a String>>(&mut self, args: I) {
+        self.publish.extend(args.cloned())
     }
 
     pub fn write_to<T: Write>(&self, writer: &mut BufWriter<T>) -> std::io::Result<()> {
@@ -124,9 +133,7 @@ impl Dockerfile {
 
     pub fn run(
         &self,
-        cmd: &Vec<String>,
-        publish: &Vec<String>,
-        volumes: &Vec<String>,
+        cmd: &Vec<String>
     ) -> io::Result<()> {
         let tag = self.tag();
 
@@ -139,17 +146,11 @@ impl Dockerfile {
             "/tmp/.X11-unix:/tmp/.X11-unix".to_string()
             ].to_vec()
         }).unwrap_or_default();
-        let publish = publish
-            .iter()
-            .chain(self.publish.iter())
-            .into_iter()
+        let publish = self.publish.iter()
             .map(|x| ["-p", x.as_str()])
             .flatten()
             .collect::<Vec<&str>>();
-        let volumes = volumes
-            .iter()
-            .chain(self.volumes.iter())
-            .into_iter()
+        let volumes = self.volumes.iter()
             .map(|x| ["-v", x.as_str()])
             .flatten()
             .collect::<Vec<&str>>();

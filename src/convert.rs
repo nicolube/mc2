@@ -112,8 +112,13 @@ impl TryFrom<&Mixin> for Dockerfile {
     type Error = ConversionError;
 
     fn try_from(value: &Mixin) -> Result<Self, Self::Error> {
+        // Flatten mixins
         let mut mixins: Vec<&Mixin> = Vec::from_iter(&value.children);
         mixins.push(value);
+
+        let mut dockerfile = Dockerfile::new();
+
+        // Process mixins and remove duplicates
         let mut from_file: Option<&Mixin> = None;
         let mut packages: Vec<(&Mixin, Vec<String>)> = Vec::new();
         let mut scripts: Vec<(&Mixin, &String)> = Vec::new();
@@ -144,6 +149,14 @@ impl TryFrom<&Mixin> for Dockerfile {
             if let Some(script) = &mixin.script {
                 scripts.push((mixin, script));
             }
+
+            if let Some(publish) = &mixin.config.publish {
+                dockerfile.add_publishes(publish.iter());
+            }
+
+            if let Some(volume) = &mixin.config.volume {
+                dockerfile.add_publishes(volume.iter());
+            }
         }
 
         let Some(from) = &from_file else {
@@ -151,8 +164,6 @@ impl TryFrom<&Mixin> for Dockerfile {
         };
         let from = from.config.base.as_ref().unwrap().clone();
         let package_manager = PackageManager::from_str(&from)?;
-
-        let mut dockerfile = Dockerfile::new();
 
         dockerfile.add(Command::FROM(from));
 

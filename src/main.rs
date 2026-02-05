@@ -112,7 +112,9 @@ fn main() -> io::Result<()> {
         }
     };
 
-    let dockerfile = Dockerfile::try_from(&config).expect("Failed to convert toolchain file");
+    let mut dockerfile = Dockerfile::try_from(&config).expect("Failed to convert toolchain file");
+    dockerfile.add_publishes(cli.publish.iter());
+    dockerfile.add_volumes(cli.volumes.iter());
 
     let mut buf = Cursor::new(Vec::new());
     {
@@ -132,7 +134,7 @@ fn main() -> io::Result<()> {
             }
             dockerfile.build()?;
         }
-        dockerfile.run(&cli.cmd, &cli.publish, &cli.volumes)?;
+        dockerfile.run(&cli.cmd)?;
     }
 
     Ok(())
