@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 use std::io::{BufWriter, Cursor, ErrorKind, Write};
 use std::process::Stdio;
 use std::{env, io, process};
+use crate::config::{Publish, Volume};
 
 #[derive(Debug, Clone)]
 pub struct User {
@@ -54,8 +55,8 @@ impl Command {
 #[derive(Debug)]
 pub struct Dockerfile {
     entries: Vec<Command>,
-    publish: Vec<String>,
-    volumes: Vec<String>,
+    publish: Vec<Publish>,
+    volumes: Vec<Volume>,
 }
 
 impl Dockerfile {
@@ -75,11 +76,11 @@ impl Dockerfile {
         self.entries.extend(commands)
     }
 
-    pub fn add_volumes<'a, I: Iterator<Item = &'a String>>(&mut self, args: I) {
+    pub fn add_volumes<'a, I: Iterator<Item = &'a Volume>>(&mut self, args: I) {
         self.volumes.extend(args.cloned())
     }
 
-    pub fn add_publishes<'a, I: Iterator<Item = &'a String>>(&mut self, args: I) {
+    pub fn add_publishes<'a, I: Iterator<Item = &'a Publish>>(&mut self, args: I) {
         self.publish.extend(args.cloned())
     }
 
@@ -147,13 +148,13 @@ impl Dockerfile {
             ].to_vec()
         }).unwrap_or_default();
         let publish = self.publish.iter()
-            .map(|x| ["-p", x.as_str()])
+            .map(|x| ["-p".into(), x.to_string()])
             .flatten()
-            .collect::<Vec<&str>>();
+            .collect::<Vec<String>>();
         let volumes = self.volumes.iter()
-            .map(|x| ["-v", x.as_str()])
+            .map(|x| ["-v".into(), x.to_string()])
             .flatten()
-            .collect::<Vec<&str>>();
+            .collect::<Vec<String>>();
         process::Command::new("docker")
             .args([
                 "run",

@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
+use crate::config::{Publish, Volume};
 
 #[derive(Debug)]
 pub struct Mixin {
@@ -49,8 +50,8 @@ pub struct MixinYaml {
     pub base: Option<String>,
     pub install: Option<Vec<String>>,
     pub mixin: Option<Vec<PathBuf>>,
-    pub publish: Option<Vec<String>>,
-    pub volume: Option<Vec<String>>,
+    pub publish: Option<Vec<Publish>>,
+    pub volume: Option<Vec<Volume>>,
 }
 
 impl Default for MixinYaml {

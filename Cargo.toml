@@ -9,8 +9,9 @@ repository = "https://github.com/nicolube/mc2"
 [dependencies]
 clap = { version = "4.5.57", features = ["derive"] }
 serde = { version = "1.0.228", features = ["derive"] }
+serde_with = "3.16.1"
 serde_yaml = "0.9.34"
-derive_more = { version = "2.1.1", features = ["error", "display"] }
+derive_more = { version = "2.1.1", features = ["error", "display", "from"] }
 users = "0.11.0"
 sha2="0.10.9"
 hex="0.4.3"

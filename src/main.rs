@@ -2,7 +2,7 @@ mod config;
 mod convert;
 mod docker;
 
-use crate::config::Mixin;
+use crate::config::{Mixin, Publish, Volume};
 use crate::docker::Dockerfile;
 use clap::Parser;
 use std::io;
@@ -22,11 +22,11 @@ struct Cli {
 
     /// Mound volumes, will be forwarded to docker run.
     #[arg(short, long)]
-    volumes: Vec<String>,
+    volumes: Vec<Volume>,
 
     /// Published ports, will be forwarded to docker run.
     #[arg(short, long)]
-    publish: Vec<String>,
+    publish: Vec<Publish>,
 
     /// Name of environment,
     /// Config will be searched at:

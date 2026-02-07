@@ -155,7 +155,7 @@ impl TryFrom<&Mixin> for Dockerfile {
             }
 
             if let Some(volume) = &mixin.yaml.volume {
-                dockerfile.add_publishes(volume.iter());
+                dockerfile.add_volumes(volume.iter());
             }
         }
 
