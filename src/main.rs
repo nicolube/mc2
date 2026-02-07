@@ -5,10 +5,8 @@ mod docker;
 use crate::config::Mixin;
 use crate::docker::Dockerfile;
 use clap::Parser;
-use std::collections::HashMap;
-use std::fs::File;
 use std::io;
-use std::io::{BufReader, BufWriter, Cursor, stdout};
+use std::io::{stdout, BufWriter};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -46,45 +44,17 @@ struct Cli {
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
-    let alias_file: Option<PathBuf> = {
-        [
-            PathBuf::from(".mc2aliases.yaml"),
-            PathBuf::from_iter([".mc", ".mc2aliases.yaml"]),
-        ]
-        .into_iter()
-        .find_map(|path| {
-            if cli.machine.is_none() || !path.exists() {
-                return None;
-            }
-            let read = BufReader::new(File::open(&path).unwrap());
-            let aliases: HashMap<String, PathBuf> = serde_yaml::from_reader(read).unwrap();
-            aliases
-                .get(&cli.machine.clone().unwrap())
-                .map(|target|  {
-                    let mut target = match path.parent() {
-                        Some(path) => path.join(target),
-                        None => target.clone(),
-                    };
-                    target.set_extension("yaml");
-                    target
-                })
-        })
+    // Load alias file path from alias file if it exists
+    let alias_file: Option<PathBuf> = match &cli.machine {
+        Some(machine) => config::get_alias_from_config(machine),
+        None=> None,
     };
 
     // Search paths
     let paths = match cli.machine {
-        None => Vec::from([
-            PathBuf::from("mc.yaml"),
-            PathBuf::from_iter([".mc", "mc.yaml"]),
-        ]),
-        Some(machine) => {
-            let machine_file_name = format!("{}.yaml", machine);
-            Vec::from_iter(alias_file.into_iter().chain([
-                PathBuf::from(&machine_file_name),
-                PathBuf::from_iter([".mc", &machine_file_name]),
-                PathBuf::from_iter([".mc", &machine, &machine_file_name]),
-            ]))
-        }
+        None => Mixin::lookup_path_unnamed(),
+        Some(machine) => Vec::from_iter(alias_file.into_iter()
+            .chain(Mixin::lookup_paths_named(&machine)))
     };
 
     // Find the first config that exists
@@ -115,12 +85,6 @@ fn main() -> io::Result<()> {
     let mut dockerfile = Dockerfile::try_from(&config).expect("Failed to convert toolchain file");
     dockerfile.add_publishes(cli.publish.iter());
     dockerfile.add_volumes(cli.volumes.iter());
-
-    let mut buf = Cursor::new(Vec::new());
-    {
-        let mut buf = BufWriter::new(&mut buf);
-        dockerfile.write_to(&mut buf)?;
-    }
 
     if cli.dry_run {
         dockerfile.write_to(&mut BufWriter::new(stdout()))?;

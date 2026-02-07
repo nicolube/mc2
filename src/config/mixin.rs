@@ -13,6 +13,23 @@ pub struct Mixin {
 }
 
 impl Mixin {
+
+    pub fn lookup_paths_named(name: &str) -> Vec<PathBuf> {
+        let machine_file_name = format!("{}.yaml", name);
+        [
+            PathBuf::from(&machine_file_name),
+            PathBuf::from_iter([".mc", &machine_file_name]),
+            PathBuf::from_iter([".mc", &name, &machine_file_name]),
+        ].to_vec()
+    }
+
+    pub fn lookup_path_unnamed() -> Vec<PathBuf> {
+        [
+            PathBuf::from("mc.yaml"),
+            PathBuf::from_iter([".mc", "mc.yaml"]),
+        ].to_vec()
+    }
+
     pub fn load<P: AsRef<Path>>(path: P) -> io::Result<Mixin> {
         let path: &Path = path.as_ref();
         let file = File::open(path)?;
