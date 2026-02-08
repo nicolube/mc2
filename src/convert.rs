@@ -1,9 +1,9 @@
 use crate::config::Mixin;
 use crate::docker::{Command, Dockerfile, User};
 use derive_more::{Display, Error};
+use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::fs;
 
 #[derive(Error, Display, Debug)]
 pub enum ConversionError {
@@ -58,9 +58,9 @@ impl PackageManager {
                     "localedef --force --inputfile=en_US --charmap=UTF-8 en_US.UTF-8".to_string(),
                 ),
             ]),
-            PackageManager::ZYPPER => result.extend([
-                self.install(&["glibc-locale", "glibc-i18ndata"]),
-            ]),
+            PackageManager::ZYPPER => {
+                result.extend([self.install(&["glibc-locale", "glibc-i18ndata"])])
+            }
             PackageManager::PACMAN => {}
             PackageManager::APT => result.extend([
                 self.install(&["locales"]),
@@ -122,7 +122,7 @@ impl TryFrom<&Mixin> for Dockerfile {
         let mut from_file: Option<&Mixin> = None;
         let mut packages: Vec<(&Mixin, Vec<String>)> = Vec::new();
         let mut scripts: Vec<(&Mixin, &String)> = Vec::new();
-        for mixin in &mixins {
+        for mixin in mixins {
             if mixin.yaml.base.is_some() {
                 if let Some(from_file) = from_file {
                     return Err(ConversionError::MultipleBases {
@@ -155,7 +155,23 @@ impl TryFrom<&Mixin> for Dockerfile {
             }
 
             if let Some(volume) = &mixin.yaml.volume {
-                dockerfile.add_volumes(volume.iter());
+                dockerfile.add_volumes(
+                    volume
+                        .iter()
+                        .map(|volume| {
+                            let mut volume = volume.clone();
+                            volume.host_path = mixin.add_parent_path(&volume.host_path);
+                            volume
+                        })
+                        .collect::<Vec<_>>()
+                        .iter()
+                );
+            }
+
+            if let Some(env) = &mixin.yaml.env {
+                for (k, v) in env {
+                    dockerfile.add_env(k, v);
+                }
             }
         }
 
@@ -179,7 +195,7 @@ impl TryFrom<&Mixin> for Dockerfile {
         let uid = users::get_current_uid();
         let uname = users::get_current_username().unwrap();
         let uname = uname.display();
-        
+
         for (mixin, package_set) in &packages {
             dockerfile.add(Command::COMMENT(format!(
                 "Installs from: {}",
@@ -187,7 +203,6 @@ impl TryFrom<&Mixin> for Dockerfile {
             )));
             dockerfile.add(package_manager.install(package_set));
         }
-
 
         dockerfile.add(Command::COMMENT("Configure user".into()));
         dockerfile.add(Command::RUN(format!("groupadd --gid {} {}", gid, gname)));

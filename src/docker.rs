@@ -54,9 +54,14 @@ impl Command {
 
 #[derive(Debug)]
 pub struct Dockerfile {
+    /// Dockerfile it self
     entries: Vec<Command>,
+    /// Publish (-p) added to docker run
     publish: Vec<Publish>,
+    /// Volume (-v) added to docker run
     volumes: Vec<Volume>,
+    /// Environment (-e) added to docker run
+    env: Vec<(String, String)>,
 }
 
 impl Dockerfile {
@@ -65,6 +70,7 @@ impl Dockerfile {
             entries: Vec::new(),
             publish: Vec::new(),
             volumes: Vec::new(),
+            env: Vec::new(),
         }
     }
 
@@ -84,7 +90,11 @@ impl Dockerfile {
         self.publish.extend(args.cloned())
     }
 
-    pub fn write_to<T: Write>(&self, writer: &mut BufWriter<T>) -> std::io::Result<()> {
+    pub fn add_env(&mut self, k: &str, v: &str) {
+        self.env.push((k.to_string(), v.to_string()))
+    }
+
+    pub fn write_to<T: Write>(&self, writer: &mut BufWriter<T>) -> io::Result<()> {
         for entry in self.entries.iter() {
             if matches!(entry, Command::COMMENT(_)) {
                 write!(writer, "\n")?;
@@ -155,6 +165,10 @@ impl Dockerfile {
             .map(|x| ["-v".into(), x.to_string()])
             .flatten()
             .collect::<Vec<String>>();
+        let envs = self.env.iter()
+            .map(|(k, v)| ["-e".into(), format!("{}={}", k, v)])
+            .flatten()
+            .collect::<Vec<String>>();
         process::Command::new("docker")
             .args([
                 "run",
@@ -168,6 +182,7 @@ impl Dockerfile {
             .args(display_args)
             .args(publish)
             .args(volumes)
+            .args(envs)
             .arg(&tag)
             .args(cmd)
             .status()?;

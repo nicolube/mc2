@@ -22,21 +22,44 @@ machine name to relative path of alias file.
 my-custom-machine: ../custom-toolchains/brainfuck
 ```
 
+### User Config
+Mutible user config can be included to mount custom volumes, declare environment variables and publish ports.
+
+Config will be loaded from the following paths and merged into one:
+- `~/.mc2config.yaml`
+- `~/.config/mc/config.yaml`
+- `./.mc2config.yaml`
+- `./.mc/.mc2config.yaml`
+
+```yaml
+publish:
+   - 8080:80  # (3)
+   - 8443:443
+volume:
+   ./my-dir:/data   # (4)
+env:
+   MY_VAR: Hello Word   # (4)
+```
+
 ### Environment Config
 
 ```yaml
 ---
-base: ubuntu:22.04	# ①
+base: ubuntu:22.04	# (1)
 install:
- - nodejs		# ②
+ - nodejs   # (2)
  - npm
-publish: # TODO
- - 8080:80		# ③
+publish:
+ - 8080:80  # (3)
  - 8443:443
+volume:
+   ./my-dir:/data   # (4)
+env:
+   MY_VAR: Hello Word   # (5)
 ---
 #!/bin/bash
 
-cargo install mc2	# ④
+cargo install mc2	# (6)
 ```
 
 The configuration file contains two sections: first a YAML frontmatter section
@@ -48,10 +71,11 @@ minimal boilerplate while still allowing arbitary actions.
    point for further setup.
 2. `install` contains a list of packages to be installed from the distribution's
    package manager
-3. `publish` contains a list of `<host port>:<container port>` declarations
+3. `publish` contains a list of `[<host_ip>:]<host port>:<container port>` declarations
    describing [port forwarding][docker-publish] from host to container
-4. A shell script containing arbritrary commands to be executed while creating
-   the container's image
+4. `volume` contains a list of `<host port>:<container port>[:<otps>]` declarations
+5. `env` contains a map of `<key>: <value>` declarations
+6. shell script containing arbritrary commands to be executed while creating
 
 Since mini-cross needs to know how to install packages on a certain
 distribution, not all Docker images are supported as base images. Current

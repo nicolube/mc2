@@ -1,15 +1,78 @@
 mod mixin;
 
+use crate::docker::Dockerfile;
 use derive_more::{Display, Error, From};
+pub use mixin::*;
+use serde::{Deserialize, Serialize};
+use serde_with::{DeserializeFromStr, SerializeDisplay};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::BufReader;
 use std::num::ParseIntError;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use serde_with::{DeserializeFromStr, SerializeDisplay};
-pub use mixin::*;
+use std::{env, io};
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+pub struct UserConfig {
+    publish: Vec<Publish>,
+    volume: Vec<Volume>,
+    env: HashMap<String, String>,
+}
+
+impl UserConfig {
+    pub fn load() -> io::Result<Self> {
+        let home = env::home_dir();
+        let current = env::current_dir()?;
+
+        let configs: Vec<UserConfig> = home
+            .map(|path| {
+                [
+                    path.join(PathBuf::from(".mc2config.yaml")),
+                    path.join(PathBuf::from_iter([".config", "mc2", "config.yaml"])),
+                ]
+            })
+            .into_iter()
+            .chain([[
+                current.join(".mc2config.yaml"),
+                current.join(PathBuf::from_iter([".mc2", ".mc2config.yaml"])),
+            ]])
+            .flatten()
+            .filter_map(|path| {
+                if path.exists() && path.is_file() {
+                    let mut config: UserConfig =
+                        serde_yaml::from_reader(BufReader::new(File::open(&path).ok()?)).ok()?;
+                    match &path.parent() {
+                        None => {}
+                        Some(parent) => config.volume.iter_mut().for_each(|volume| {
+                            if volume.host_path.is_relative() {
+                                volume.host_path = parent.join(path.clone())
+                            }
+                        }),
+                    }
+                    Some(Ok(config))
+                } else {
+                    None
+                }
+            })
+            .collect::<io::Result<Vec<_>>>()?;
+        let mut result = UserConfig::default();
+        for config in configs {
+            result.publish.extend(config.publish);
+            result.volume.extend(config.volume);
+            result.env.extend(config.env);
+        }
+        Ok(result)
+    }
+    pub fn append_docker(&self, dockerfile: &mut Dockerfile) {
+        dockerfile.add_publishes(self.publish.iter());
+        dockerfile.add_volumes(self.volume.iter());
+        for (k, v) in &self.env {
+            dockerfile.add_env(k, v);
+        }
+    }
+}
 
 #[derive(Debug, Display, Error, From)]
 pub enum ParsePublishError {
@@ -62,28 +125,32 @@ impl FromStr for Publish {
 
 #[derive(Debug, Display, Error, From)]
 pub enum ParseVolumeError {
-    #[display("Invalid publish format: <host_path>:<machine_path>[:<ro|readonly|volume-nocopy,..>]")]
+    #[display(
+        "Invalid publish format: <host_path>:<machine_path>[:<ro|readonly|volume-nocopy,..>]"
+    )]
     InvalidFormat,
-
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DeserializeFromStr, SerializeDisplay)]
 pub struct Volume {
     pub host_path: PathBuf,
-    pub machine_path: PathBuf ,
+    pub machine_path: PathBuf,
     pub opts: Vec<String>,
 }
 
 impl Display for Volume {
-
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.host_path.display(), self.machine_path.display())?;
+        write!(
+            f,
+            "{}:{}",
+            self.host_path.display(),
+            self.machine_path.display()
+        )?;
         if !self.opts.is_empty() {
             write!(f, ":{}", self.opts.join(","))?;
         }
         Ok(())
     }
-
 }
 
 impl FromStr for Volume {
@@ -106,7 +173,7 @@ impl FromStr for Volume {
             return Ok(Self {
                 opts,
                 host_path,
-                machine_path
+                machine_path,
             });
         }
         Err(ParseVolumeError::InvalidFormat)
@@ -121,7 +188,7 @@ pub fn get_alias_from_config(machine: &str) -> Option<PathBuf> {
         ]
         .into_iter()
         .find_map(|path| {
-            if !path.exists() {
+            if !path.exists() || !path.is_file() {
                 return None;
             }
             let read = BufReader::new(File::open(&path).unwrap());
@@ -188,5 +255,17 @@ mod tests {
         };
         assert_eq!(Volume::from_str(raw).unwrap(), expected);
         assert_eq!(&expected.to_string(), raw);
+    }
+
+    #[test]
+    fn test_user_config() {
+        let expected = UserConfig {
+            env: HashMap::from([("A".into(), "B".into())]),
+            publish: Vec::from(["8080:80".parse().unwrap()]),
+            volume: Vec::from(["/usr/bin/test:/bin".parse().unwrap()]),
+        };
+
+        let yaml = serde_yaml::to_string(&expected).unwrap();
+        println!("{}", yaml);
     }
 }

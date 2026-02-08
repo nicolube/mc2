@@ -1,9 +1,10 @@
+use crate::config::{Publish, Volume};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
-use crate::config::{Publish, Volume};
 
 #[derive(Debug)]
 pub struct Mixin {
@@ -14,21 +15,22 @@ pub struct Mixin {
 }
 
 impl Mixin {
-
     pub fn lookup_paths_named(name: &str) -> Vec<PathBuf> {
         let machine_file_name = format!("{}.yaml", name);
         [
             PathBuf::from(&machine_file_name),
             PathBuf::from_iter([".mc", &machine_file_name]),
             PathBuf::from_iter([".mc", &name, &machine_file_name]),
-        ].to_vec()
+        ]
+        .to_vec()
     }
 
     pub fn lookup_path_unnamed() -> Vec<PathBuf> {
         [
             PathBuf::from("mc.yaml"),
             PathBuf::from_iter([".mc", "mc.yaml"]),
-        ].to_vec()
+        ]
+        .to_vec()
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> io::Result<Mixin> {
@@ -43,6 +45,14 @@ impl Mixin {
 
         Ok(mixin)
     }
+
+    pub fn add_parent_path<T: AsRef<Path>>(&self, path: &T) -> PathBuf {
+        let path: &Path = path.as_ref();
+        match self.path.parent() {
+            Some(parent) if path.is_relative() => parent.join(path),
+            _ => path.to_path_buf(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -52,6 +62,7 @@ pub struct MixinYaml {
     pub mixin: Option<Vec<PathBuf>>,
     pub publish: Option<Vec<Publish>>,
     pub volume: Option<Vec<Volume>>,
+    pub env: Option<HashMap<String, String>>,
 }
 
 impl Default for MixinYaml {
@@ -62,6 +73,7 @@ impl Default for MixinYaml {
             mixin: None,
             publish: None,
             volume: None,
+            env: None,
         }
     }
 }
@@ -107,12 +119,13 @@ where
                     ));
                 }
 
-                let config: MixinYaml = serde_yaml::from_str(&cfg_lines.join("\n")).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("invalid config yaml: {e}"),
-                    )
-                })?;
+                let config: MixinYaml =
+                    serde_yaml::from_str(&cfg_lines.join("\n")).map_err(|e| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("invalid config yaml: {e}"),
+                        )
+                    })?;
 
                 // Remaining lines are script
                 let script_rest = it.collect::<Vec<_>>().join("\n");
@@ -163,10 +176,13 @@ fn normalized_path(mixin: &Mixin, path: &Path) -> PathBuf {
         Some(parent) => parent.join(file_name),
         None => PathBuf::from(file_name),
     };
-    PathBuf::from_iter(match parent_path {
-        None => path.clone(),
-        Some(parent) => parent.join(path),
-    }.components())
+    PathBuf::from_iter(
+        match parent_path {
+            None => path.clone(),
+            Some(parent) => parent.join(path),
+        }
+        .components(),
+    )
 }
 
 fn load_mixins(parent: &Mixin, children: &mut Vec<Mixin>) -> io::Result<()> {
@@ -187,8 +203,6 @@ fn load_mixins(parent: &Mixin, children: &mut Vec<Mixin>) -> io::Result<()> {
     }
 
     Ok(())
-
-
 }
 
 #[cfg(test)]
@@ -209,10 +223,7 @@ mod tests {
         let mixin = Mixin::try_from((path, reader)).expect("should parse");
         assert_eq!(mixin.path, path.to_path_buf());
         assert_eq!(mixin.yaml.base.as_deref(), Some("ubuntu:22.04"));
-        assert_eq!(
-            mixin.yaml.install,
-            Some(vec!["curl".into(), "git".into()])
-        );
+        assert_eq!(mixin.yaml.install, Some(vec!["curl".into(), "git".into()]));
         assert_eq!(
             mixin.script.as_deref(),
             Some("echo hello\n".trim_end_matches('\n'))
