@@ -14,11 +14,19 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{env, io};
 
+// Well map home path to an absolute one.
+fn normalize_path<P: AsRef<Path>>(path: P) -> PathBuf {
+    let path = path.as_ref();
+    path.strip_prefix("~")
+        .map(|path| env::home_dir().unwrap().join(path))
+        .unwrap_or(path.to_path_buf())
+}
+
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct UserConfig {
-    publish: Vec<Publish>,
-    volume: Vec<Volume>,
-    env: HashMap<String, String>,
+    publish: Option<Vec<Publish>>,
+    volume: Option<Vec<Volume>>,
+    env: Option<HashMap<String, String>>,
 }
 
 impl UserConfig {
@@ -41,15 +49,16 @@ impl UserConfig {
             .flatten()
             .filter_map(|path| {
                 if path.exists() && path.is_file() {
-                    let mut config: UserConfig =
-                        serde_yaml::from_reader(BufReader::new(File::open(&path).ok()?)).ok()?;
-                    match &path.parent() {
-                        None => {}
-                        Some(parent) => config.volume.iter_mut().for_each(|volume| {
+                    let file = BufReader::new(File::open(&path).ok()?);
+                    let mut config: UserConfig = serde_yaml::from_reader(file).ok()?;
+                    match (&path.parent(), &mut config.volume) {
+                        (Some(parent), Some(volume)) => volume.iter_mut().for_each(|volume| {
+                            volume.host_path = normalize_path(&volume.host_path);
                             if volume.host_path.is_relative() {
-                                volume.host_path = parent.join(path.clone())
+                                volume.host_path = parent.join(&volume.host_path)
                             }
                         }),
+                        _ => {}
                     }
                     Some(Ok(config))
                 } else {
@@ -57,20 +66,45 @@ impl UserConfig {
                 }
             })
             .collect::<io::Result<Vec<_>>>()?;
-        let mut result = UserConfig::default();
-        for config in configs {
-            result.publish.extend(config.publish);
-            result.volume.extend(config.volume);
-            result.env.extend(config.env);
-        }
-        Ok(result)
+        let publish = Vec::from_iter(
+            configs
+                .iter()
+                .filter_map(|config| config.publish.as_ref())
+                .cloned()
+                .flatten(),
+        );
+        let volume = Vec::from_iter(
+            configs
+                .iter()
+                .filter_map(|config| config.volume.as_ref())
+                .cloned()
+                .flatten(),
+        );
+        let env = HashMap::from_iter(
+            configs
+                .iter()
+                .filter_map(|config| config.env.as_ref())
+                .cloned()
+                .flatten(),
+        );
+        Ok(Self {
+            publish: Some(publish),
+            volume: Some(volume),
+            env: Some(env),
+        })
     }
     pub fn append_docker(&self, dockerfile: &mut Dockerfile) {
-        dockerfile.add_publishes(self.publish.iter());
-        dockerfile.add_volumes(self.volume.iter());
-        for (k, v) in &self.env {
-            dockerfile.add_env(k, v);
+        if let Some(publish) = &self.publish {
+            dockerfile.add_publishes(publish.iter());
         }
+        if let Some(volume) = &self.volume {
+            dockerfile.add_volumes(volume.iter());
+        }
+        if let Some(env) = &self.env {
+            for (k, v) in env {
+                dockerfile.add_env(k, v);
+            }
+        };
     }
 }
 
@@ -260,9 +294,9 @@ mod tests {
     #[test]
     fn test_user_config() {
         let expected = UserConfig {
-            env: HashMap::from([("A".into(), "B".into())]),
-            publish: Vec::from(["8080:80".parse().unwrap()]),
-            volume: Vec::from(["/usr/bin/test:/bin".parse().unwrap()]),
+            env: Some(HashMap::from([("A".into(), "B".into())])),
+            publish: Some(Vec::from(["8080:80".parse().unwrap()])),
+            volume: Some(Vec::from(["/usr/bin/test:/bin".parse().unwrap()])),
         };
 
         let yaml = serde_yaml::to_string(&expected).unwrap();

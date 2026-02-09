@@ -124,7 +124,7 @@ fn main() -> io::Result<()> {
     if !cli.append_docker(&mut dockerfile) {
         return Ok(());
     }
-
+    
     if cli.dry_run {
         dockerfile.write_to(&mut BufWriter::new(stdout()))?;
         return Ok(());

@@ -1,6 +1,6 @@
 [package]
 name = "mc2"
-version = "0.3.0-rc1"
+version = "0.3.0-rc2"
 edition = "2024"
 license-file = "LICENSE"
 description = "Provides user configured development environments using docker. Rust replacement for https://github.com/ooxi/mini-cross"
