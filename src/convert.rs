@@ -47,9 +47,6 @@ impl PackageManager {
     fn defaults(&self) -> Vec<Command> {
         let mut result: Vec<Command> = Vec::from([
             Command::COMMENT("Ensure UTF-8 Support".into()),
-            Command::env("LANG", "en_US.UTF-8"),
-            Command::env("LANGUAGE", "en_US:en"),
-            Command::env("LC_ALL", "en_US.UTF-8"),
         ]);
         match self {
             PackageManager::DNF => result.extend([
@@ -70,6 +67,11 @@ impl PackageManager {
             ]),
             PackageManager::APK => {}
         };
+        result.extend([
+            Command::env("LANG", "en_US.UTF-8"),
+            Command::env("LANGUAGE", "en_US:en"),
+            Command::env("LC_ALL", "en_US.UTF-8"),
+        ]);
 
         result.extend([
             Command::COMMENT("Installing sudo and allow sudo for anyone".into()),

@@ -80,12 +80,12 @@ fn main() -> io::Result<()> {
 
             // Search paths
             let paths = match &cli.machine {
-                None => Mixin::lookup_path_unnamed(),
-                Some(machine) => Vec::from_iter(
+                Some(machine) if machine != "_" => Vec::from_iter(
                     alias_file
                         .into_iter()
                         .chain(Mixin::lookup_paths_named(machine)),
                 ),
+                _ => Mixin::lookup_path_unnamed(),
             };
 
             // Find the first config that exists
