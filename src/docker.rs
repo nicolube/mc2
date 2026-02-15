@@ -1,10 +1,10 @@
+use crate::config::{Publish, Volume};
 use derive_more::Display;
 use sha2::Digest;
 use std::fmt::{Display, Formatter};
 use std::io::{BufWriter, Cursor, ErrorKind, Write};
 use std::process::Stdio;
 use std::{env, io, process};
-use crate::config::{Publish, Volume};
 
 #[derive(Debug, Clone)]
 pub struct User {
@@ -142,30 +142,42 @@ impl Dockerfile {
         Ok(())
     }
 
-    pub fn run(
-        &self,
-        cmd: &Vec<String>
-    ) -> io::Result<()> {
+    pub fn run(&self, cmd: &Vec<String>, stdio_enable: bool) -> io::Result<()> {
         let tag = self.tag();
 
+        let stdio = if stdio_enable {
+            Vec::from(["-it"])
+        } else {
+            Vec::new()
+        };
         let workdir = env::current_dir()?;
-        let display_args = env::var("DISPLAY").ok().map(|display| {
-            [
-            "-e".to_string(),
-            format!("DISPLAY={}", display),
-            "-v".to_string(),
-            "/tmp/.X11-unix:/tmp/.X11-unix".to_string()
-            ].to_vec()
-        }).unwrap_or_default();
-        let publish = self.publish.iter()
+        let display_args = env::var("DISPLAY")
+            .ok()
+            .map(|display| {
+                [
+                    "-e".to_string(),
+                    format!("DISPLAY={}", display),
+                    "-v".to_string(),
+                    "/tmp/.X11-unix:/tmp/.X11-unix".to_string(),
+                ]
+                .to_vec()
+            })
+            .unwrap_or_default();
+        let publish = self
+            .publish
+            .iter()
             .map(|x| ["-p".into(), x.to_string()])
             .flatten()
             .collect::<Vec<String>>();
-        let volumes = self.volumes.iter()
+        let volumes = self
+            .volumes
+            .iter()
             .map(|x| ["-v".into(), x.to_string()])
             .flatten()
             .collect::<Vec<String>>();
-        let envs = self.env.iter()
+        let envs = self
+            .env
+            .iter()
             .map(|(k, v)| ["-e".into(), format!("{}={}", k, v)])
             .flatten()
             .collect::<Vec<String>>();
@@ -173,12 +185,12 @@ impl Dockerfile {
             .args([
                 "run",
                 "--rm",
-                "-it",
                 "-v",
                 &format!("{}:{}", workdir.display(), workdir.display()),
                 "-w",
                 &workdir.to_string_lossy(),
             ])
+            .args(stdio)
             .args(display_args)
             .args(publish)
             .args(volumes)

@@ -36,6 +36,10 @@ struct Cli {
     #[arg(short, long)]
     env: Vec<String>,
 
+    /// Will disable stdio in docker run
+    #[arg(long, default_value = "false")]
+    ci: bool,
+
     /// Name of environment,
     /// Config will be searched at:
     /// mc.yml,
@@ -137,7 +141,7 @@ fn main() -> io::Result<()> {
             }
             dockerfile.build()?;
         }
-        dockerfile.run(&cli.cmd)?;
+        dockerfile.run(&cli.cmd, !cli.ci)?;
     }
 
     Ok(())
