@@ -27,7 +27,7 @@ Mutible user config can be included to mount custom volumes, declare environment
 
 Config will be loaded from the following paths and merged into one:
 - `~/.mc2config.yaml`
-- `~/.config/mc/config.yaml`
+- `~/.config/mc2/config.yaml`
 - `./.mc2config.yaml`
 - `./.mc/.mc2config.yaml`
 
@@ -36,7 +36,7 @@ publish:
    - 8080:80  # (3)
    - 8443:443
 volume:
-   ./my-dir:/data   # (4)
+   - ./my-dir:/data   # (4)
 env:
    MY_VAR: Hello Word   # (4)
 ```
@@ -53,7 +53,7 @@ publish:
  - 8080:80  # (3)
  - 8443:443
 volume:
-   ./my-dir:/data   # (4)
+ - ./my-dir:/data   # (4)
 env:
    MY_VAR: Hello Word   # (5)
 ---
