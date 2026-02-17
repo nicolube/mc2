@@ -3,9 +3,12 @@ name: ci
 on:
   push:
 
-
 env:
   CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+  discussions: write
 
 jobs:
   build:
@@ -20,6 +23,11 @@ jobs:
       with:
         name: binary
         path: target/release/mc2
+    - name: Release
+      uses: softprops/action-gh-release@v2.5.0
+      if: github.ref_type == 'tag'
+      with:
+        files: target/release/mc2
   test:
     needs: build
     runs-on: ubuntu-latest
