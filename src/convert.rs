@@ -45,9 +45,7 @@ impl PackageManager {
     }
 
     fn defaults(&self) -> Vec<Command> {
-        let mut result: Vec<Command> = Vec::from([
-            Command::COMMENT("Ensure UTF-8 Support".into()),
-        ]);
+        let mut result: Vec<Command> = Vec::from([Command::COMMENT("Ensure UTF-8 Support".into())]);
         match self {
             PackageManager::DNF => result.extend([
                 self.install(&["glibc-locale-source"]),
@@ -176,7 +174,7 @@ impl TryFrom<&Mixin> for Dockerfile {
                             volume
                         })
                         .collect::<Vec<_>>()
-                        .iter()
+                        .iter(),
                 );
             }
 
@@ -245,12 +243,7 @@ impl TryFrom<&Mixin> for Dockerfile {
             let dirs = fs::read_dir(parent_dir).unwrap();
             let dirs = dirs
                 .filter_map(|x| match x {
-                    Ok(x)
-                        if x.path().is_dir()
-                            && !x.file_name().to_string_lossy().starts_with(".") =>
-                    {
-                        Some(x.path())
-                    }
+                    Ok(x) if !x.file_name().to_string_lossy().starts_with(".") => Some(x.path()),
                     _ => None,
                 })
                 .collect::<Vec<_>>();
