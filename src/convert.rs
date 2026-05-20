@@ -45,9 +45,7 @@ impl PackageManager {
     }
 
     fn defaults(&self) -> Vec<Command> {
-        let mut result: Vec<Command> = Vec::from([
-            Command::COMMENT("Ensure UTF-8 Support".into()),
-        ]);
+        let mut result: Vec<Command> = Vec::from([Command::COMMENT("Ensure UTF-8 Support".into())]);
         match self {
             PackageManager::DNF => result.extend([
                 self.install(&["glibc-locale-source"]),
@@ -176,7 +174,7 @@ impl TryFrom<&Mixin> for Dockerfile {
                             volume
                         })
                         .collect::<Vec<_>>()
-                        .iter()
+                        .iter(),
                 );
             }
 
@@ -243,21 +241,16 @@ impl TryFrom<&Mixin> for Dockerfile {
             && parent_dir.components().count() >= 2
         {
             let dirs = fs::read_dir(parent_dir).unwrap();
-            let dirs = dirs
+            let files = dirs
                 .filter_map(|x| match x {
-                    Ok(x)
-                        if x.path().is_dir()
-                            && !x.file_name().to_string_lossy().starts_with(".") =>
-                    {
-                        Some(x.path())
-                    }
+                    Ok(x) if !x.file_name().to_string_lossy().starts_with(".") => Some(x.path()),
                     _ => None,
                 })
                 .collect::<Vec<_>>();
-            if !dirs.is_empty() {
-                dockerfile.add(Command::COMMENT("Adding context dirs".into()));
+            if !files.is_empty() {
+                dockerfile.add(Command::COMMENT("Adding context files".into()));
             }
-            for file in dirs {
+            for file in files {
                 dockerfile.add(Command::COPY(
                     file.to_string_lossy().to_string(),
                     format!("/{}", file.file_name().unwrap().to_string_lossy()),
